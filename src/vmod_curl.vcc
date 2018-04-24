@@ -40,6 +40,9 @@ $Function STRING body(PRIV_TASK)
 $Function VOID set_timeout(PRIV_TASK, INT)
 $Function VOID set_connect_timeout(PRIV_TASK, INT)
 
+# set TCP Keep-Alive with Keep-Idle and Keep-Interval times
+$Function VOID set_tcp_keepalive(PRIV_TASK, INT, INT)
+
 $Function VOID set_ssl_verify_peer(PRIV_TASK, INT)
 $Function VOID set_ssl_verify_host(PRIV_TASK, INT)
 $Function VOID set_ssl_cafile(PRIV_TASK, STRING)

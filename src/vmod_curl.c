@@ -48,6 +48,8 @@ struct vmod_curl {
 	long status;
 	long timeout;
 	long connect_timeout;
+	long tcp_keepalive_idle_time;
+	long tcp_keepalive_interval_time;
 	char flags;
 #define F_SSL_VERIFY_PEER	(1 << 0)
 #define F_SSL_VERIFY_HOST	(1 << 1)
@@ -150,6 +152,8 @@ cm_clear(struct vmod_curl *c)
 
 	c->connect_timeout = -1;
 	c->timeout = -1;
+	c->tcp_keepalive_idle_time = -1;
+	c->tcp_keepalive_interval_time = -1;
 	c->cafile = NULL;
 	c->capath = NULL;
 #ifdef HAVE_CURLOPT_UNIX_SOCKET_PATH
@@ -327,6 +331,12 @@ cm_perform(struct vmod_curl *c)
 #endif
 	}
 
+	if (c->tcp_keepalive_idle_time > 0) {
+	    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
+	    curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, c->tcp_keepalive_idle_time);
+	    curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, c->tcp_keepalive_interval_time);
+	}
+
 	if (c->flags & F_SSL_VERIFY_PEER)
 		curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 1L);
 	else
@@ -492,6 +502,14 @@ vmod_set_connect_timeout(VRT_CTX, struct vmod_priv *priv, VCL_INT timeout)
 {
 	(void)ctx;
 	cm_get(priv)->connect_timeout = timeout;
+}
+
+VCL_VOID
+vmod_set_tcp_keepalive(VRT_CTX, struct vmod_priv *priv, VCL_INT idle, VCL_INT interval)
+{
+	(void)ctx;
+	cm_get(priv)->tcp_keepalive_idle_time = idle;
+	cm_get(priv)->tcp_keepalive_interval_time = interval;
 }
 
 VCL_VOID

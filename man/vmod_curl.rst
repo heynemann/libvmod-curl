@@ -174,6 +174,18 @@ Return value
 Description
         Sets the CURLOPT_CONNECTTIMEOUT_MS option to the value of the first argument.
 
+set_tcp_keepalive
+-----------------
+
+Prototype
+        ::
+
+                set_tcp_keepalive(INT, INT)
+Return value
+        VOID
+Description
+        Sets the CURLOPT_TCP_KEEPALIVE option to 1L, CURLOPT_TCP_KEEPIDLE to the value of the first argument and CURLOPT_TCP_KEEPINTVL to the value of the second argument.
+
 set_ssl_verify_peer
 -------------------
 
