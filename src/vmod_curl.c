@@ -96,7 +96,7 @@ cm_init(struct vmod_curl *c)
 	c->body = VSB_new_auto();
 
 	c->curl_handle = curl_easy_init();
-	AN(curl_handle);
+	AN(c->curl_handle);
 
 	cm_clear(c);
 }
