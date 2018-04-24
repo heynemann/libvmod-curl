@@ -332,9 +332,9 @@ cm_perform(struct vmod_curl *c)
 	}
 
 	if (c->tcp_keepalive_idle_time > 0) {
-	    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
-	    curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, c->tcp_keepalive_idle_time);
-	    curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, c->tcp_keepalive_interval_time);
+	    curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
+	    curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPIDLE, c->tcp_keepalive_idle_time);
+	    curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPINTVL, c->tcp_keepalive_interval_time);
 	}
 
 	if (c->flags & F_SSL_VERIFY_PEER)
