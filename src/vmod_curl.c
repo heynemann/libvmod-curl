@@ -383,7 +383,7 @@ cm_perform(struct vmod_curl *c)
 	c->method = NULL;
 
 	cm_clear_req_headers(c);
-	curl_easy_cleanup(c->curl_handle);
+	/*curl_easy_cleanup(c->curl_handle);*/
 	VSB_finish(c->body);
 }
 
