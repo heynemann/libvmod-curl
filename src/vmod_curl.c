@@ -41,8 +41,6 @@ enum debug_flags {
 #undef DBG
 };
 
-CURL *curl_handle;
-
 struct vmod_curl {
 	unsigned magic;
 #define VMOD_CURL_MAGIC 0xBBB0C87C
@@ -53,6 +51,7 @@ struct vmod_curl {
 	long tcp_max_connects;
 	long tcp_keepalive_idle_time;
 	long tcp_keepalive_interval_time;
+	CURLSH *share;
 	char flags;
 #define F_SSL_VERIFY_PEER	(1 << 0)
 #define F_SSL_VERIFY_HOST	(1 << 1)
@@ -77,6 +76,7 @@ struct vmod_curl {
 };
 
 static void cm_clear(struct vmod_curl *c);
+static pthread_mutex_t connlock;
 
 int
 event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
@@ -89,23 +89,50 @@ event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
 	return (0);
 }
 
+static void lock_cb(CURL *handle, curl_lock_data data,
+                    curl_lock_access access, void *userptr)
+{
+  (void)access; /* unused */ 
+  (void)userptr; /* unused */ 
+  (void)handle; /* unused */ 
+  (void)data; /* unused */ 
+  pthread_mutex_lock(&connlock);
+}
+ 
+static void unlock_cb(CURL *handle, curl_lock_data data,
+                      void *userptr)
+{
+  (void)userptr; /* unused */ 
+  (void)handle;  /* unused */ 
+  (void)data;    /* unused */ 
+  pthread_mutex_unlock(&connlock);
+}
+ 
+static void init_locks(void)
+{
+  pthread_mutex_init(&connlock, NULL);
+}
+ 
+static void kill_locks(void)
+{
+  pthread_mutex_destroy(&connlock);
+}
+
 static void
 cm_init(struct vmod_curl *c)
 {
+	init_locks();
 	c->magic = VMOD_CURL_MAGIC;
 	VTAILQ_INIT(&c->headers);
 	VTAILQ_INIT(&c->req_headers);
 	c->body = VSB_new_auto();
 
+	c->share = curl_share_init();
+	curl_share_setopt(c->share, CURLSHOPT_LOCKFUNC, lock_cb);
+	curl_share_setopt(c->share, CURLSHOPT_UNLOCKFUNC, unlock_cb);
+	curl_share_setopt(c->share, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT);
+
 	cm_clear(c);
-
-	curl_handle = curl_easy_init();
-	AN(curl_handle);
-
-	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
-	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPIDLE, 30L);
-	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPINTVL, 15L);
-	curl_easy_setopt(curl_handle, CURLOPT_MAXCONNECTS, 10L);
 }
 
 static void
@@ -289,6 +316,10 @@ recv_hdrs(void *ptr, size_t size, size_t nmemb, void *s)
 static void
 cm_perform(struct vmod_curl *c)
 {
+	CURL *curl_handle;
+	curl_handle = curl_easy_init();
+	AN(curl_handle);
+
 	CURLcode cr;
 	struct curl_slist *req_headers = NULL;
 	struct req_hdr *rh;
@@ -340,6 +371,13 @@ cm_perform(struct vmod_curl *c)
 #endif
 	}
 
+	if (c->tcp_keepalive_idle_time > 0) {
+	    curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
+	    curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPIDLE, c->tcp_keepalive_idle_time);
+	    curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPINTVL, c->tcp_keepalive_interval_time);
+	    curl_easy_setopt(curl_handle, CURLOPT_MAXCONNECTS, c->tcp_max_connects);
+	}
+
 	if (c->flags & F_SSL_VERIFY_PEER)
 		curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 1L);
 	else
@@ -372,6 +410,8 @@ cm_perform(struct vmod_curl *c)
 
 	curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, c->method);
 
+	curl_easy_setopt(curl_handle, CURLOPT_SHARE, c->share);
+
 	cr = curl_easy_perform(curl_handle);
 
 	if (cr != 0)
@@ -384,9 +424,9 @@ cm_perform(struct vmod_curl *c)
 
 	c->method = NULL;
 
-	/*cm_clear_req_headers(c);*/
-	/*curl_easy_cleanup(curl_handle);*/
-	/*VSB_finish(c->body);*/
+	cm_clear_req_headers(c);
+	curl_easy_cleanup(curl_handle);
+	VSB_finish(c->body);
 }
 
 VCL_VOID
