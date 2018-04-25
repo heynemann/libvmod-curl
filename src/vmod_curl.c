@@ -97,6 +97,8 @@ cm_init(struct vmod_curl *c)
 	VTAILQ_INIT(&c->req_headers);
 	c->body = VSB_new_auto();
 
+	cm_clear(c);
+
 	curl_handle = curl_easy_init();
 	AN(curl_handle);
 
@@ -104,8 +106,6 @@ cm_init(struct vmod_curl *c)
 	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPIDLE, 30L);
 	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPINTVL, 15L);
 	curl_easy_setopt(curl_handle, CURLOPT_MAXCONNECTS, 10L);
-
-	cm_clear(c);
 }
 
 static void
