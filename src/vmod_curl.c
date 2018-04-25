@@ -285,8 +285,6 @@ recv_hdrs(void *ptr, size_t size, size_t nmemb, void *s)
 static void
 cm_perform(struct vmod_curl *c)
 {
-	curl_easy_reset(c->curl_handle);
-
 	CURLcode cr;
 	struct curl_slist *req_headers = NULL;
 	struct req_hdr *rh;
@@ -390,6 +388,7 @@ cm_perform(struct vmod_curl *c)
 	c->method = NULL;
 
 	cm_clear_req_headers(c);
+	curl_easy_reset(c->curl_handle);
 	/*curl_easy_cleanup(c->curl_handle);*/
 	VSB_finish(c->body);
 }
