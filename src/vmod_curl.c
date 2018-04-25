@@ -52,7 +52,7 @@ struct vmod_curl {
 	long tcp_keepalive_idle_time;
 	long tcp_keepalive_interval_time;
 	char flags;
-	CURL *curl_handle;
+	CURLSH *share;
 #define F_SSL_VERIFY_PEER	(1 << 0)
 #define F_SSL_VERIFY_HOST	(1 << 1)
 #define F_METHOD_GET		(1 << 2)
@@ -96,8 +96,9 @@ cm_init(struct vmod_curl *c)
 	VTAILQ_INIT(&c->req_headers);
 	c->body = VSB_new_auto();
 
-	c->curl_handle = curl_easy_init();
-	AN(c->curl_handle);
+	c->share = curl_share_init();
+	curl_share_setopt(c->share, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT);
+	curl_share_setopt(c->share, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
 
 	cm_clear(c);
 }
@@ -283,102 +284,109 @@ recv_hdrs(void *ptr, size_t size, size_t nmemb, void *s)
 static void
 cm_perform(struct vmod_curl *c)
 {
+	CURL *curl_handle;
+
 	CURLcode cr;
 	struct curl_slist *req_headers = NULL;
 	struct req_hdr *rh;
+
+	curl_handle = curl_easy_init();
+	AN(curl_handle);
+
+	curl_easy_setopt(curl_handle, CURLOPT_SHARE, c->share);	
 
 	VTAILQ_FOREACH(rh, &c->req_headers, list)
 		req_headers = curl_slist_append(req_headers, rh->value);
 
 	if (c->flags & F_METHOD_POST) {
-		curl_easy_setopt(c->curl_handle, CURLOPT_POST, 1L);
-		curl_easy_setopt(c->curl_handle, CURLOPT_POSTFIELDS,
+		curl_easy_setopt(curl_handle, CURLOPT_POST, 1L);
+		curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS,
 		    c->postfields);
 	} else if (c->flags & F_METHOD_HEAD)
-		curl_easy_setopt(c->curl_handle, CURLOPT_NOBODY, 1L);
+		curl_easy_setopt(curl_handle, CURLOPT_NOBODY, 1L);
 	else if (c->flags & F_METHOD_GET)
-		curl_easy_setopt(c->curl_handle, CURLOPT_HTTPGET, 1L);
+		curl_easy_setopt(curl_handle, CURLOPT_HTTPGET, 1L);
 
 	if (req_headers)
-		curl_easy_setopt(c->curl_handle, CURLOPT_HTTPHEADER,
+		curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER,
 		    req_headers);
 
-	curl_easy_setopt(c->curl_handle, CURLOPT_URL, c->url);
-	curl_easy_setopt(c->curl_handle, CURLOPT_NOSIGNAL, 1L);
-	curl_easy_setopt(c->curl_handle, CURLOPT_NOPROGRESS, 1L);
-	curl_easy_setopt(c->curl_handle, CURLOPT_WRITEFUNCTION, recv_data);
-	curl_easy_setopt(c->curl_handle, CURLOPT_WRITEDATA, c);
-	curl_easy_setopt(c->curl_handle, CURLOPT_HEADERFUNCTION, recv_hdrs);
-	curl_easy_setopt(c->curl_handle, CURLOPT_HEADERDATA, c);
+	curl_easy_setopt(curl_handle, CURLOPT_URL, c->url);
+	curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1L);
+	curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
+	curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, recv_data);
+	curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, c);
+	curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, recv_hdrs);
+	curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, c);
 
 	if (c->proxy)
-		curl_easy_setopt(c->curl_handle, CURLOPT_PROXY, c->proxy);
+		curl_easy_setopt(curl_handle, CURLOPT_PROXY, c->proxy);
 
 	if (c->timeout > 0) {
 #ifdef HAVE_CURLOPT_TIMEOUT_MS
-		curl_easy_setopt(c->curl_handle, CURLOPT_TIMEOUT_MS,
+		curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT_MS,
 		    c->timeout);
 #else
-		curl_easy_setopt(c->curl_handle, CURLOPT_TIMEOUT,
+		curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT,
 		    c->timeout / 1000);
 #endif
 	}
 
 	if (c->connect_timeout > 0) {
 #ifdef HAVE_CURLOPT_CONNECTTIMEOUT_MS
-		curl_easy_setopt(c->curl_handle, CURLOPT_CONNECTTIMEOUT_MS,
+		curl_easy_setopt(curl_handle, CURLOPT_CONNECTTIMEOUT_MS,
 		    c->connect_timeout);
 #else
-		curl_easy_setopt(c->curl_handle, CURLOPT_CONNECTTIMEOUT,
+		curl_easy_setopt(curl_handle, CURLOPT_CONNECTTIMEOUT,
 		    c->connect_timeout / 1000);
 #endif
 	}
 
 	if (c->tcp_keepalive_idle_time > 0) {
-	    curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
-	    curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPIDLE, c->tcp_keepalive_idle_time);
-	    curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPINTVL, c->tcp_keepalive_interval_time);
-	    curl_easy_setopt(c->curl_handle, CURLOPT_MAXCONNECTS, c->tcp_max_connects);
+	    curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
+	    curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPIDLE, c->tcp_keepalive_idle_time);
+	    curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPINTVL, c->tcp_keepalive_interval_time);
+	    curl_easy_setopt(curl_handle, CURLOPT_MAXCONNECTS, c->tcp_max_connects);
 	}
 
 	if (c->flags & F_SSL_VERIFY_PEER)
-		curl_easy_setopt(c->curl_handle, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 1L);
 	else
-		curl_easy_setopt(c->curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
+		curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
 
 	if (c->flags & F_SSL_VERIFY_HOST)
-		curl_easy_setopt(c->curl_handle, CURLOPT_SSL_VERIFYHOST, 1L);
+		curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 1L);
 	else
-		curl_easy_setopt(c->curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
+		curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
 
 	if (c->cafile)
-		curl_easy_setopt(c->curl_handle, CURLOPT_CAINFO, c->cafile);
+		curl_easy_setopt(curl_handle, CURLOPT_CAINFO, c->cafile);
 
 	if (c->capath)
-		curl_easy_setopt(c->curl_handle, CURLOPT_CAPATH, c->capath);
+		curl_easy_setopt(curl_handle, CURLOPT_CAPATH, c->capath);
 
 #ifdef HAVE_CURLOPT_UNIX_SOCKET_PATH
 	if (c->sun_path)
-		curl_easy_setopt(c->curl_handle, CURLOPT_UNIX_SOCKET_PATH,
+		curl_easy_setopt(curl_handle, CURLOPT_UNIX_SOCKET_PATH,
 		    c->sun_path);
 #endif
 
 	if (c->debug_flags != 0) {
-		curl_easy_setopt(c->curl_handle, CURLOPT_DEBUGFUNCTION,
+		curl_easy_setopt(curl_handle, CURLOPT_DEBUGFUNCTION,
 		    cm_debug);
-		curl_easy_setopt(c->curl_handle, CURLOPT_DEBUGDATA, c);
-		curl_easy_setopt(c->curl_handle, CURLOPT_VERBOSE, 1L);
+		curl_easy_setopt(curl_handle, CURLOPT_DEBUGDATA, c);
+		curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1L);
 	} else
-		curl_easy_setopt(c->curl_handle, CURLOPT_VERBOSE, 0L);
+		curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 0L);
 
-	curl_easy_setopt(c->curl_handle, CURLOPT_CUSTOMREQUEST, c->method);
+	curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, c->method);
 
-	cr = curl_easy_perform(c->curl_handle);
+	cr = curl_easy_perform(curl_handle);
 
 	if (cr != 0)
 		c->error = curl_easy_strerror(cr);
 
-	curl_easy_getinfo(c->curl_handle, CURLINFO_RESPONSE_CODE, &c->status);
+	curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &c->status);
 
 	if (req_headers)
 		curl_slist_free_all(req_headers);
@@ -386,7 +394,7 @@ cm_perform(struct vmod_curl *c)
 	c->method = NULL;
 
 	cm_clear_req_headers(c);
-	/*curl_easy_cleanup(c->curl_handle);*/
+	curl_easy_cleanup(curl_handle);
 	VSB_finish(c->body);
 }
 
