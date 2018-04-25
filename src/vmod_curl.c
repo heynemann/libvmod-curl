@@ -390,7 +390,6 @@ cm_perform(struct vmod_curl *c)
 	cm_clear_req_headers(c);
 	/*curl_easy_cleanup(c->curl_handle);*/
 	VSB_finish(c->body);
-	curl_easy_reset(c->curl_handle);
 }
 
 VCL_VOID
