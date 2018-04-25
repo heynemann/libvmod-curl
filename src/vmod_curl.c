@@ -92,7 +92,7 @@ event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
 	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
 	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPIDLE, 60L);
 	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPINTVL, 30L);
-	curl_easy_setopt(curl_handle, CURLOPT_MAXCONNECTS, 5L);
+	curl_easy_setopt(curl_handle, CURLOPT_MAXCONNECTS, 1000L);
 
 	return (0);
 }
