@@ -76,7 +76,6 @@ struct vmod_curl {
 };
 
 static void cm_clear(struct vmod_curl *c);
-static pthread_mutex_t connlock;
 
 int
 event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
@@ -89,39 +88,9 @@ event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
 	return (0);
 }
 
-static void lock_cb(CURL *handle, curl_lock_data data,
-                    curl_lock_access access, void *userptr)
-{
-  (void)access; /* unused */ 
-  (void)userptr; /* unused */ 
-  (void)handle; /* unused */ 
-  (void)data; /* unused */ 
-  pthread_mutex_lock(&connlock);
-}
- 
-static void unlock_cb(CURL *handle, curl_lock_data data,
-                      void *userptr)
-{
-  (void)userptr; /* unused */ 
-  (void)handle;  /* unused */ 
-  (void)data;    /* unused */ 
-  pthread_mutex_unlock(&connlock);
-}
- 
-static void init_locks(void)
-{
-  pthread_mutex_init(&connlock, NULL);
-}
- 
-static void kill_locks(void)
-{
-  pthread_mutex_destroy(&connlock);
-}
-
 static void
 cm_init(struct vmod_curl *c)
 {
-	init_locks();
 	c->magic = VMOD_CURL_MAGIC;
 	VTAILQ_INIT(&c->headers);
 	VTAILQ_INIT(&c->req_headers);
@@ -129,6 +98,10 @@ cm_init(struct vmod_curl *c)
 
 	c->curl_handle = curl_easy_init();
 	AN(c->curl_handle);
+
+	curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
+	curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPIDLE, 60L);
+	curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPINTVL, 30L);
 
 	cm_clear(c);
 }
@@ -365,12 +338,9 @@ cm_perform(struct vmod_curl *c)
 #endif
 	}
 
-	if (c->tcp_keepalive_idle_time > 0) {
-	    curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
-	    curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPIDLE, c->tcp_keepalive_idle_time);
-	    curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPINTVL, c->tcp_keepalive_interval_time);
-	    curl_easy_setopt(c->curl_handle, CURLOPT_MAXCONNECTS, c->tcp_max_connects);
-	}
+	/*if (c->tcp_keepalive_idle_time > 0) {*/
+	    /*curl_easy_setopt(c->curl_handle, CURLOPT_MAXCONNECTS, c->tcp_max_connects);*/
+	/*}*/
 
 	if (c->flags & F_SSL_VERIFY_PEER)
 		curl_easy_setopt(c->curl_handle, CURLOPT_SSL_VERIFYPEER, 1L);
@@ -419,6 +389,7 @@ cm_perform(struct vmod_curl *c)
 	cm_clear_req_headers(c);
 	/*curl_easy_cleanup(c->curl_handle);*/
 	VSB_finish(c->body);
+	curl_easy_reset(c->curl_handle);
 }
 
 VCL_VOID
