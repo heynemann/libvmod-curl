@@ -338,7 +338,7 @@ cm_perform(struct vmod_curl *c)
 	    curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
 	    curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPIDLE, c->tcp_keepalive_idle_time);
 	    curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPINTVL, c->tcp_keepalive_interval_time);
-	    curl_easy_setopt(curl, CURLOPT_MAXCONNECTS, c->tcp_max_connects);
+	    curl_easy_setopt(c->curl_handle, CURLOPT_MAXCONNECTS, c->tcp_max_connects);
 	}
 
 	if (c->flags & F_SSL_VERIFY_PEER)
