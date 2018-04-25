@@ -53,7 +53,6 @@ struct vmod_curl {
 	long tcp_keepalive_interval_time;
 	char flags;
 	CURL *curl_handle;
-	CURLSH *curl_share;
 #define F_SSL_VERIFY_PEER	(1 << 0)
 #define F_SSL_VERIFY_HOST	(1 << 1)
 #define F_METHOD_GET		(1 << 2)
@@ -97,13 +96,8 @@ cm_init(struct vmod_curl *c)
 	VTAILQ_INIT(&c->req_headers);
 	c->body = VSB_new_auto();
 
-	c->curl_share = curl_share_init();
-	curl_share_setopt(c->curl_share, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
-	curl_share_setopt(c->curl_share, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT);
-
 	c->curl_handle = curl_easy_init();
 	AN(c->curl_handle);
-	curl_easy_setopt(c->curl_handle, CURLOPT_SHARE, c->curl_share);
 
 	cm_clear(c);
 }
@@ -181,8 +175,7 @@ cm_clear(struct vmod_curl *c)
 	c->vctx = NULL;
 	c->debug_flags = 0;
 
-	/*curl_easy_cleanup(c->curl_handle);*/
-	/*curl_share_cleanup(c->curl_share);*/
+	curl_easy_cleanup(c->curl_handle);
 }
 
 static int
@@ -292,6 +285,8 @@ recv_hdrs(void *ptr, size_t size, size_t nmemb, void *s)
 static void
 cm_perform(struct vmod_curl *c)
 {
+	curl_easy_reset(c->curl_handle);
+
 	CURLcode cr;
 	struct curl_slist *req_headers = NULL;
 	struct req_hdr *rh;
