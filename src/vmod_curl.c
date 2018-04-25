@@ -100,6 +100,11 @@ cm_init(struct vmod_curl *c)
 	curl_handle = curl_easy_init();
 	AN(curl_handle);
 
+	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
+	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPIDLE, 30L);
+	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPINTVL, 15L);
+	curl_easy_setopt(curl_handle, CURLOPT_MAXCONNECTS, 10L);
+
 	cm_clear(c);
 }
 
@@ -333,13 +338,6 @@ cm_perform(struct vmod_curl *c)
 		curl_easy_setopt(curl_handle, CURLOPT_CONNECTTIMEOUT,
 		    c->connect_timeout / 1000);
 #endif
-	}
-
-	if (c->tcp_keepalive_idle_time > 0) {
-	    curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
-	    curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPIDLE, c->tcp_keepalive_idle_time);
-	    curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPINTVL, c->tcp_keepalive_interval_time);
-	    curl_easy_setopt(curl_handle, CURLOPT_MAXCONNECTS, c->tcp_max_connects);
 	}
 
 	if (c->flags & F_SSL_VERIFY_PEER)
