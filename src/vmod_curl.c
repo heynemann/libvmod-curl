@@ -48,6 +48,7 @@ struct vmod_curl {
 	long status;
 	long timeout;
 	long connect_timeout;
+	long tcp_max_connects;
 	long tcp_keepalive_idle_time;
 	long tcp_keepalive_interval_time;
 	char flags;
@@ -157,6 +158,7 @@ cm_clear(struct vmod_curl *c)
 
 	c->connect_timeout = -1;
 	c->timeout = -1;
+	c->tcp_max_connects = 5;
 	c->tcp_keepalive_idle_time = -1;
 	c->tcp_keepalive_interval_time = -1;
 	c->cafile = NULL;
@@ -336,6 +338,7 @@ cm_perform(struct vmod_curl *c)
 	    curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
 	    curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPIDLE, c->tcp_keepalive_idle_time);
 	    curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPINTVL, c->tcp_keepalive_interval_time);
+	    curl_easy_setopt(curl, CURLOPT_MAXCONNECTS, c->tcp_max_connects);
 	}
 
 	if (c->flags & F_SSL_VERIFY_PEER)
@@ -506,11 +509,12 @@ vmod_set_connect_timeout(VRT_CTX, struct vmod_priv *priv, VCL_INT timeout)
 }
 
 VCL_VOID
-vmod_set_tcp_keepalive(VRT_CTX, struct vmod_priv *priv, VCL_INT idle, VCL_INT interval)
+vmod_set_tcp_keepalive(VRT_CTX, struct vmod_priv *priv, VCL_INT idle, VCL_INT interval, VCL_INT max_connects)
 {
 	(void)ctx;
 	cm_get(priv)->tcp_keepalive_idle_time = idle;
 	cm_get(priv)->tcp_keepalive_interval_time = interval;
+	cm_get(priv)->tcp_max_connects = max_connects;
 }
 
 VCL_VOID
