@@ -51,7 +51,6 @@ struct vmod_curl {
 	long tcp_max_connects;
 	long tcp_keepalive_idle_time;
 	long tcp_keepalive_interval_time;
-	CURL *curl_handle;
 	char flags;
 #define F_SSL_VERIFY_PEER	(1 << 0)
 #define F_SSL_VERIFY_HOST	(1 << 1)
@@ -76,6 +75,7 @@ struct vmod_curl {
 };
 
 static void cm_clear(struct vmod_curl *c);
+static CURL *curl_handle;
 
 int
 event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
@@ -85,6 +85,14 @@ event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
 	if (e != VCL_EVENT_LOAD)
 		return (0);
 	curl_global_init(CURL_GLOBAL_ALL);
+
+	curl_handle = curl_easy_init();
+	AN(curl_handle);
+
+	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
+	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPIDLE, 60L);
+	curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPINTVL, 30L);
+
 	return (0);
 }
 
@@ -95,13 +103,6 @@ cm_init(struct vmod_curl *c)
 	VTAILQ_INIT(&c->headers);
 	VTAILQ_INIT(&c->req_headers);
 	c->body = VSB_new_auto();
-
-	c->curl_handle = curl_easy_init();
-	AN(c->curl_handle);
-
-	curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
-	curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPIDLE, 60L);
-	curl_easy_setopt(c->curl_handle, CURLOPT_TCP_KEEPINTVL, 30L);
 
 	cm_clear(c);
 }
@@ -295,91 +296,91 @@ cm_perform(struct vmod_curl *c)
 		req_headers = curl_slist_append(req_headers, rh->value);
 
 	if (c->flags & F_METHOD_POST) {
-		curl_easy_setopt(c->curl_handle, CURLOPT_POST, 1L);
-		curl_easy_setopt(c->curl_handle, CURLOPT_POSTFIELDS,
+		curl_easy_setopt(curl_handle, CURLOPT_POST, 1L);
+		curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS,
 		    c->postfields);
 	} else if (c->flags & F_METHOD_HEAD)
-		curl_easy_setopt(c->curl_handle, CURLOPT_NOBODY, 1L);
+		curl_easy_setopt(curl_handle, CURLOPT_NOBODY, 1L);
 	else if (c->flags & F_METHOD_GET)
-		curl_easy_setopt(c->curl_handle, CURLOPT_HTTPGET, 1L);
+		curl_easy_setopt(curl_handle, CURLOPT_HTTPGET, 1L);
 
 	if (req_headers)
-		curl_easy_setopt(c->curl_handle, CURLOPT_HTTPHEADER,
+		curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER,
 		    req_headers);
 
-	curl_easy_setopt(c->curl_handle, CURLOPT_URL, c->url);
-	curl_easy_setopt(c->curl_handle, CURLOPT_NOSIGNAL, 1L);
-	curl_easy_setopt(c->curl_handle, CURLOPT_NOPROGRESS, 1L);
-	curl_easy_setopt(c->curl_handle, CURLOPT_WRITEFUNCTION, recv_data);
-	curl_easy_setopt(c->curl_handle, CURLOPT_WRITEDATA, c);
-	curl_easy_setopt(c->curl_handle, CURLOPT_HEADERFUNCTION, recv_hdrs);
-	curl_easy_setopt(c->curl_handle, CURLOPT_HEADERDATA, c);
+	curl_easy_setopt(curl_handle, CURLOPT_URL, c->url);
+	curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1L);
+	curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
+	curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, recv_data);
+	curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, c);
+	curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, recv_hdrs);
+	curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, c);
 
 	if (c->proxy)
-		curl_easy_setopt(c->curl_handle, CURLOPT_PROXY, c->proxy);
+		curl_easy_setopt(curl_handle, CURLOPT_PROXY, c->proxy);
 
 	if (c->timeout > 0) {
 #ifdef HAVE_CURLOPT_TIMEOUT_MS
-		curl_easy_setopt(c->curl_handle, CURLOPT_TIMEOUT_MS,
+		curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT_MS,
 		    c->timeout);
 #else
-		curl_easy_setopt(c->curl_handle, CURLOPT_TIMEOUT,
+		curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT,
 		    c->timeout / 1000);
 #endif
 	}
 
 	if (c->connect_timeout > 0) {
 #ifdef HAVE_CURLOPT_CONNECTTIMEOUT_MS
-		curl_easy_setopt(c->curl_handle, CURLOPT_CONNECTTIMEOUT_MS,
+		curl_easy_setopt(curl_handle, CURLOPT_CONNECTTIMEOUT_MS,
 		    c->connect_timeout);
 #else
-		curl_easy_setopt(c->curl_handle, CURLOPT_CONNECTTIMEOUT,
+		curl_easy_setopt(curl_handle, CURLOPT_CONNECTTIMEOUT,
 		    c->connect_timeout / 1000);
 #endif
 	}
 
 	/*if (c->tcp_keepalive_idle_time > 0) {*/
-	    /*curl_easy_setopt(c->curl_handle, CURLOPT_MAXCONNECTS, c->tcp_max_connects);*/
+	    /*curl_easy_setopt(curl_handle, CURLOPT_MAXCONNECTS, c->tcp_max_connects);*/
 	/*}*/
 
 	if (c->flags & F_SSL_VERIFY_PEER)
-		curl_easy_setopt(c->curl_handle, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 1L);
 	else
-		curl_easy_setopt(c->curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
+		curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
 
 	if (c->flags & F_SSL_VERIFY_HOST)
-		curl_easy_setopt(c->curl_handle, CURLOPT_SSL_VERIFYHOST, 1L);
+		curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 1L);
 	else
-		curl_easy_setopt(c->curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
+		curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
 
 	if (c->cafile)
-		curl_easy_setopt(c->curl_handle, CURLOPT_CAINFO, c->cafile);
+		curl_easy_setopt(curl_handle, CURLOPT_CAINFO, c->cafile);
 
 	if (c->capath)
-		curl_easy_setopt(c->curl_handle, CURLOPT_CAPATH, c->capath);
+		curl_easy_setopt(curl_handle, CURLOPT_CAPATH, c->capath);
 
 #ifdef HAVE_CURLOPT_UNIX_SOCKET_PATH
 	if (c->sun_path)
-		curl_easy_setopt(c->curl_handle, CURLOPT_UNIX_SOCKET_PATH,
+		curl_easy_setopt(curl_handle, CURLOPT_UNIX_SOCKET_PATH,
 		    c->sun_path);
 #endif
 
 	if (c->debug_flags != 0) {
-		curl_easy_setopt(c->curl_handle, CURLOPT_DEBUGFUNCTION,
+		curl_easy_setopt(curl_handle, CURLOPT_DEBUGFUNCTION,
 		    cm_debug);
-		curl_easy_setopt(c->curl_handle, CURLOPT_DEBUGDATA, c);
-		curl_easy_setopt(c->curl_handle, CURLOPT_VERBOSE, 1L);
+		curl_easy_setopt(curl_handle, CURLOPT_DEBUGDATA, c);
+		curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1L);
 	} else
-		curl_easy_setopt(c->curl_handle, CURLOPT_VERBOSE, 0L);
+		curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 0L);
 
-	curl_easy_setopt(c->curl_handle, CURLOPT_CUSTOMREQUEST, c->method);
+	curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, c->method);
 
-	cr = curl_easy_perform(c->curl_handle);
+	cr = curl_easy_perform(curl_handle);
 
 	if (cr != 0)
 		c->error = curl_easy_strerror(cr);
 
-	curl_easy_getinfo(c->curl_handle, CURLINFO_RESPONSE_CODE, &c->status);
+	curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &c->status);
 
 	if (req_headers)
 		curl_slist_free_all(req_headers);
@@ -387,9 +388,9 @@ cm_perform(struct vmod_curl *c)
 	c->method = NULL;
 
 	cm_clear_req_headers(c);
-	/*curl_easy_cleanup(c->curl_handle);*/
+	/*curl_easy_cleanup(curl_handle);*/
 	VSB_finish(c->body);
-	curl_easy_reset(c->curl_handle);
+	curl_easy_reset(curl_handle);
 }
 
 VCL_VOID
