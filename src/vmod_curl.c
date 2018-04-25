@@ -181,8 +181,8 @@ cm_clear(struct vmod_curl *c)
 	c->vctx = NULL;
 	c->debug_flags = 0;
 
-	curl_easy_cleanup(c->curl_handle);
-	curl_share_cleanup(c->curl_share);
+	/*curl_easy_cleanup(c->curl_handle);*/
+	/*curl_share_cleanup(c->curl_share);*/
 }
 
 static int
