@@ -44,9 +44,9 @@ enum debug_flags {
 #undef DBG
 };
 
-static CURL *curl_handles[1000];
+static CURL *curl_handles[10000];
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t mutexes[1000];
+static pthread_mutex_t mutexes[10000];
 
 struct vmod_curl {
 	unsigned magic;
@@ -90,7 +90,7 @@ event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
 	curl_global_init(CURL_GLOBAL_ALL);
 
 	pthread_mutex_lock(&mutex);
-	for (int i=0; i < 1000; i++) {
+	for (int i=0; i < 10000; i++) {
 	    curl_handles[i] = curl_easy_init();
 	    pthread_mutex_init (&mutexes[i], NULL);
 	    AN(curl_handles[i]);
@@ -292,7 +292,7 @@ cm_perform(struct vmod_curl *c)
 	struct curl_slist *req_headers = NULL;
 	struct req_hdr *rh;
 
-	int current_handle = rand() % 1000;
+	int current_handle = rand() % 10000;
 
 	VTAILQ_FOREACH(rh, &c->req_headers, list)
 		req_headers = curl_slist_append(req_headers, rh->value);
