@@ -1,0 +1,6 @@
+request:
+  method: GET
+  path: "/"
+response:
+  statusCode: 200
+  body: 'hello world'

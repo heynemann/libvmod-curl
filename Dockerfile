@@ -48,6 +48,7 @@ RUN chmod +x /usr/local/bin/start-varnishd
 ENV VARNISH_PORT 80
 ENV VARNISH_MEMORY 100m
 ENV VARNISH_DAEMON_OPTS ""
+ENV VARNISH_VCL_PATH /etc/varnish/default.vcl
 
 EXPOSE 80
 
@@ -55,5 +56,7 @@ WORKDIR /tmp
 RUN curl -sfLO https://curl.haxx.se/download/curl-7.59.0.tar.gz
 RUN tar xvzf curl-7.59.0.tar.gz
 RUN cd curl* && ./configure && make && make install
+
+WORKDIR /app
 
 CMD ["/usr/local/bin/start-varnishd"]
