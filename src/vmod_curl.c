@@ -1,4 +1,5 @@
 #include "config.h"
+#include <pthread.h>
 
 #include <stdlib.h>
 #include <curl/curl.h>
@@ -24,6 +25,8 @@
 #define VRT_CTX		const struct vrt_ctx *ctx
 #endif
 
+#define CURL_CONTEXT_MAGIC 0xe11eaa71
+
 struct hdr {
 	char *key;
 	char *value;
@@ -40,6 +43,9 @@ enum debug_flags {
 #include "debug_flags.h"
 #undef DBG
 };
+
+static CURL *curl_handle;
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct vmod_curl {
 	unsigned magic;
@@ -81,6 +87,12 @@ event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
 	if (e != VCL_EVENT_LOAD)
 		return (0);
 	curl_global_init(CURL_GLOBAL_ALL);
+
+	pthread_mutex_lock(&mutex);
+	curl_handle = curl_easy_init();
+	AN(curl_handle);
+	pthread_mutex_unlock(&mutex);
+
 	return (0);
 }
 
@@ -272,17 +284,14 @@ recv_hdrs(void *ptr, size_t size, size_t nmemb, void *s)
 static void
 cm_perform(struct vmod_curl *c)
 {
-	CURL *curl_handle;
 	CURLcode cr;
 	struct curl_slist *req_headers = NULL;
 	struct req_hdr *rh;
 
-	curl_handle = curl_easy_init();
-	AN(curl_handle);
-
 	VTAILQ_FOREACH(rh, &c->req_headers, list)
 		req_headers = curl_slist_append(req_headers, rh->value);
 
+	pthread_mutex_lock(&mutex);
 	if (c->flags & F_METHOD_POST) {
 		curl_easy_setopt(curl_handle, CURLOPT_POST, 1L);
 		curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS,
@@ -365,6 +374,7 @@ cm_perform(struct vmod_curl *c)
 		c->error = curl_easy_strerror(cr);
 
 	curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &c->status);
+	pthread_mutex_unlock(&mutex);
 
 	if (req_headers)
 		curl_slist_free_all(req_headers);
@@ -372,7 +382,7 @@ cm_perform(struct vmod_curl *c)
 	c->method = NULL;
 
 	cm_clear_req_headers(c);
-	curl_easy_cleanup(curl_handle);
+	/*curl_easy_cleanup(curl_handle);*/
 	VSB_finish(c->body);
 }
 
