@@ -44,8 +44,10 @@ enum debug_flags {
 #undef DBG
 };
 
-static CURL *curl_handle;
+static int current_handle = 0;
+static CURL *curl_handles[100];
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutexes[100];
 
 struct vmod_curl {
 	unsigned magic;
@@ -89,8 +91,11 @@ event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
 	curl_global_init(CURL_GLOBAL_ALL);
 
 	pthread_mutex_lock(&mutex);
-	curl_handle = curl_easy_init();
-	AN(curl_handle);
+	for (int i=0; i < 100; i++) {
+	    curl_handles[i] = curl_easy_init();
+	    pthread_mutex_init(&mutexes[i], NULL);
+	    AN(curl_handles[i]);
+	}
 	pthread_mutex_unlock(&mutex);
 
 	return (0);
@@ -290,8 +295,8 @@ cm_perform(struct vmod_curl *c)
 
 	VTAILQ_FOREACH(rh, &c->req_headers, list)
 		req_headers = curl_slist_append(req_headers, rh->value);
-
-	pthread_mutex_lock(&mutex);
+	pthread_mutex_lock(&mutexes[current_handle]);
+	CURL *curl_handle = curl_handles[current_handle];
 	if (c->flags & F_METHOD_POST) {
 		curl_easy_setopt(curl_handle, CURLOPT_POST, 1L);
 		curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS,
@@ -374,7 +379,12 @@ cm_perform(struct vmod_curl *c)
 		c->error = curl_easy_strerror(cr);
 
 	curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &c->status);
-	pthread_mutex_unlock(&mutex);
+	pthread_mutex_unlock(&mutexes[current_handle]);
+
+	current_handle++;
+	if (current_handle > 99) {
+	    current_handle = 0;
+	}
 
 	if (req_headers)
 		curl_slist_free_all(req_headers);
