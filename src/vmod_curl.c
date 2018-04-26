@@ -44,11 +44,10 @@ enum debug_flags {
 #undef DBG
 };
 
-const int HANDLE_COUNT = 1000;
 static int current_handle = 0;
-static CURL *curl_handles[HANDLE_COUNT];
+static CURL *curl_handles[1000];
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t mutexes[HANDLE_COUNT];
+static pthread_mutex_t mutexes[1000];
 
 struct vmod_curl {
 	unsigned magic;
@@ -383,7 +382,7 @@ cm_perform(struct vmod_curl *c)
 	pthread_mutex_unlock(&mutexes[current_handle]);
 
 	current_handle++;
-	if (current_handle >= HANDLE_COUNT) {
+	if (current_handle >= 1000) {
 	    current_handle = 0;
 	}
 
