@@ -382,7 +382,7 @@ cm_perform(struct vmod_curl *c)
 	pthread_mutex_unlock(&mutexes[current_handle]);
 
 	current_handle++;
-	if (current_handle >= 1000) {
+	if (current_handle >= 999) {
 	    current_handle = 0;
 	}
 
