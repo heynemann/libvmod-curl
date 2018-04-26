@@ -1,28 +1,35 @@
 deps start-deps:
-		@docker-compose --project-name vmod-curl up -d
+		@docker-compose --project-name vmodcurl up -d
 		@echo "Dependencies started successfully."
 
 deps-build:
-		@docker-compose --project-name vmod-curl up --build -d
+		@docker-compose --project-name vmodcurl up --build -d
 
 stop-deps:
-		@docker-compose --project-name vmod-curl down
+		@docker-compose --project-name vmodcurl down
 
 shell:
-		@docker-compose --project-name vmod-curl run varnish /bin/bash
+		@docker-compose --project-name vmodcurl run varnish /bin/bash
 
 put:
-		@docker container create --name dummy -v vmod-curl_app:/root alpine
+		@docker container create --name dummy -v vmodcurl_app:/root alpine
 		@docker cp `pwd`/. dummy:/root
 		@docker rm dummy
 
 first-compile:
-		@docker-compose --project-name vmod-curl run varnish /bin/bash -c "cd /app && ./autogen.sh && ./configure && make"
+		@docker-compose --project-name vmodcurl run varnish /bin/bash -c "cd /app && ./autogen.sh && ./configure && make"
 
 compile:
-		@docker-compose --project-name vmod-curl run varnish /bin/bash -c "cd /app && make"
+		@docker-compose --project-name vmodcurl run varnish /bin/bash -c "cd /app && make"
 
-test: compile put unit
+test: put compile unit
 
 unit:
-		@docker-compose --project-name vmod-curl run varnish /bin/bash -c "cd /app && varnishtest -Dvmod_topbuild=/app src/tests/*.vtc"
+		@docker-compose --project-name vmodcurl run varnish /bin/bash -c "cd /app && varnishtest -Dvmod_topbuild=/app src/tests/*.vtc"
+
+VMOD_TESTS = ./src/tests/*.vtc
+.PHONY: $(VMOD_TESTS)
+
+./src/tests/*.vtc:
+		@${MAKE} -f ${MAKEFILE_LIST} put compile
+		@docker-compose --project-name vmodcurl run varnish /bin/bash -c "cd /app && varnishtest -Dvmod_topbuild=/app $@"
