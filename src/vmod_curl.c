@@ -91,7 +91,7 @@ event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
 	curl_global_init(CURL_GLOBAL_ALL);
 
 	pthread_mutex_lock(&mutex);
-	for (int i=0; i < 100; i++) {
+	for (int i=0; i < 1000; i++) {
 	    curl_handles[i] = curl_easy_init();
 	    pthread_mutex_init(&mutexes[i], NULL);
 	    AN(curl_handles[i]);
