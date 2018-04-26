@@ -1,0 +1,10 @@
+version: '3'
+services:
+  varnish:
+    build:
+      context: .
+    volumes:
+      - app:/app
+
+volumes:
+    app:
