@@ -80,22 +80,69 @@ struct vmod_curl {
 
 static void cm_clear(struct vmod_curl *c);
 
+static int
+handle_vcl_load_event(VRT_CTX)
+{
+    curl_global_init(CURL_GLOBAL_ALL);
+
+    // Done!
+    return 0;
+}
+
+static int
+handle_vcl_warm_event(VRT_CTX, struct vmod_priv *priv)
+{
+    pthread_mutex_lock(&mutex);
+    for (int i=0; i < 2; i++) {
+	curl_handles[i] = curl_easy_init();
+	pthread_mutex_init (&mutexes[i], NULL);
+	AN(curl_handles[i]);
+    }
+    pthread_mutex_unlock(&mutex);
+
+    // Done!
+    return 0;
+}
+
+static int
+handle_vcl_cold_event(VRT_CTX, struct vmod_priv *priv)
+{
+    pthread_mutex_lock(&mutex);
+    for (int i=0; i < 2; i++) {
+	curl_easy_cleanup(curl_handles[i]);
+	curl_handles[i] = NULL;
+	pthread_mutex_destroy(&mutexes[i]);
+    }
+    pthread_mutex_unlock(&mutex);
+
+    // Done!
+    return 0;
+}
+
+static int
+handle_vcl_discard_event(VRT_CTX)
+{
+    // Done!
+    return 0;
+}
+
 int
 event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
 {
 	(void)ctx;
 	(void)priv;
-	if (e != VCL_EVENT_LOAD)
-		return (0);
-	curl_global_init(CURL_GLOBAL_ALL);
-
-	pthread_mutex_lock(&mutex);
-	for (int i=0; i < 2; i++) {
-	    curl_handles[i] = curl_easy_init();
-	    pthread_mutex_init (&mutexes[i], NULL);
-	    AN(curl_handles[i])2
+	switch (e) {
+		case VCL_EVENT_LOAD:
+		    return handle_vcl_load_event(ctx);
+		case VCL_EVENT_WARM:
+		    return handle_vcl_warm_event(ctx, priv);
+		case VCL_EVENT_COLD:
+		    return handle_vcl_cold_event(ctx, priv);
+		case VCL_EVENT_DISCARD:
+		    return handle_vcl_discard_event(ctx);
+		default:
+		    return 0;
 	}
-	pthread_mutex_unlock(&mutex);
 
 	return (0);
 }
