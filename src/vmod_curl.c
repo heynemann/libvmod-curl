@@ -298,6 +298,7 @@ cm_perform(struct vmod_curl *c)
 		req_headers = curl_slist_append(req_headers, rh->value);
 	pthread_mutex_lock(&mutexes[current_handle]);
 	CURL *curl_handle = curl_handles[current_handle];
+	curl_easy_reset(curl_handle);
 	if (c->flags & F_METHOD_POST) {
 		curl_easy_setopt(curl_handle, CURLOPT_POST, 1L);
 		curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS,
