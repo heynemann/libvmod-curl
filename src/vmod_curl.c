@@ -44,9 +44,9 @@ enum debug_flags {
 #undef DBG
 };
 
-const int MAX_HANDLES = 1000;
-static CURL *curl_handles[1000];
-static pthread_mutex_t mutexes[1000];
+const int MAX_HANDLES = 50000;
+static CURL *curl_handles[50000];
+static pthread_mutex_t mutexes[50000];
 
 struct vmod_curl {
 	unsigned magic;
