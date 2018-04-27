@@ -44,9 +44,9 @@ enum debug_flags {
 #undef DBG
 };
 
-static CURL *curl_handles[2];
+static CURL *curl_handles[1000];
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t mutexes[2];
+static pthread_mutex_t mutexes[1000];
 
 struct vmod_curl {
 	unsigned magic;
@@ -93,7 +93,7 @@ static int
 handle_vcl_warm_event(VRT_CTX, struct vmod_priv *priv)
 {
     pthread_mutex_lock(&mutex);
-    for (int i=0; i < 2; i++) {
+    for (int i=0; i < 1000; i++) {
 	curl_handles[i] = curl_easy_init();
 	pthread_mutex_init (&mutexes[i], NULL);
 	AN(curl_handles[i]);
@@ -108,7 +108,7 @@ static int
 handle_vcl_cold_event(VRT_CTX, struct vmod_priv *priv)
 {
     pthread_mutex_lock(&mutex);
-    for (int i=0; i < 2; i++) {
+    for (int i=0; i < 1000; i++) {
 	curl_easy_cleanup(curl_handles[i]);
 	curl_handles[i] = NULL;
 	pthread_mutex_destroy(&mutexes[i]);
