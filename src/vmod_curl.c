@@ -82,7 +82,7 @@ struct vmod_curl {
 static void cm_clear(struct vmod_curl *c);
 
 static int
-handle_vcl_load_event(VRT_CTX)
+handle_vcl_load_event(VRT_CTX, struct vmod_priv *vcl_priv)
 {
     curl_global_init(CURL_GLOBAL_ALL);
 
@@ -101,21 +101,21 @@ handle_vcl_load_event(VRT_CTX)
 }
 
 static int
-handle_vcl_warm_event(VRT_CTX, struct vmod_priv *priv)
+handle_vcl_warm_event(VRT_CTX, struct vmod_priv *vcl_priv)
 {
     // Done!
     return 0;
 }
 
 static int
-handle_vcl_cold_event(VRT_CTX, struct vmod_priv *priv)
+handle_vcl_cold_event(VRT_CTX, struct vmod_priv *vcl_priv)
 {
     // Done!
     return 0;
 }
 
 static int
-handle_vcl_discard_event(VRT_CTX)
+handle_vcl_discard_event(VRT_CTX, struct vmod_priv *vcl_priv)
 {
     for (int i=0; i < MAX_HANDLES; i++) {
 	curl_easy_cleanup(curl_handles[i]);
@@ -135,13 +135,13 @@ event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
 	(void)priv;
 	switch (e) {
 		case VCL_EVENT_LOAD:
-		    return handle_vcl_load_event(ctx);
+		    return handle_vcl_load_event(ctx, priv);
 		case VCL_EVENT_WARM:
 		    return handle_vcl_warm_event(ctx, priv);
 		case VCL_EVENT_COLD:
 		    return handle_vcl_cold_event(ctx, priv);
 		case VCL_EVENT_DISCARD:
-		    return handle_vcl_discard_event(ctx);
+		    return handle_vcl_discard_event(ctx, priv);
 		default:
 		    return 0;
 	}
