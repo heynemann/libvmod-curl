@@ -46,7 +46,8 @@ enum debug_flags {
 
 const int MAX_HANDLES = 5000;
 static CURL *curl_handles[5000];
-static pthread_mutex_t mutexes[5000];
+/*static pthread_mutex_t mutexes[5000];*/
+static struct lock locks[5000];
 
 struct vmod_curl {
 	unsigned magic;
@@ -85,9 +86,13 @@ handle_vcl_load_event(VRT_CTX)
 {
     curl_global_init(CURL_GLOBAL_ALL);
 
+    struct VSC_C_lck *lock_class;
+    lock_class = Lck_CreateClass("curl");
+
     for (int i=0; i < MAX_HANDLES; i++) {
 	curl_handles[i] = curl_easy_init();
-	pthread_mutex_init (&mutexes[i], NULL);
+	Lck_New(&locks[i], lock_class);
+	/*pthread_mutex_init (&mutexes[i], NULL);*/
 	AN(curl_handles[i]);
     }
 
@@ -115,7 +120,8 @@ handle_vcl_discard_event(VRT_CTX)
     for (int i=0; i < MAX_HANDLES; i++) {
 	curl_easy_cleanup(curl_handles[i]);
 	curl_handles[i] = NULL;
-	pthread_mutex_destroy(&mutexes[i]);
+	/*pthread_mutex_destroy(&mutexes[i]);*/
+	Lck_Delete(&locks[i]);
     }
 
     // Done!
@@ -339,7 +345,10 @@ cm_perform(struct vmod_curl *c)
 
 	VTAILQ_FOREACH(rh, &c->req_headers, list)
 		req_headers = curl_slist_append(req_headers, rh->value);
-	pthread_mutex_lock(&mutexes[current_handle]);
+
+	/*pthread_mutex_lock(&mutexes[current_handle]);*/
+	Lck_Lock(&locks[current_handle]);
+
 	CURL *curl_handle = curl_handles[current_handle];
 	curl_easy_reset(curl_handle);
 	if (c->flags & F_METHOD_POST) {
@@ -424,7 +433,8 @@ cm_perform(struct vmod_curl *c)
 		c->error = curl_easy_strerror(cr);
 
 	curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &c->status);
-	pthread_mutex_unlock(&mutexes[current_handle]);
+	/*pthread_mutex_unlock(&mutexes[current_handle]);*/
+	Lck_Unlock(&locks[current_handle]);
 
 	if (req_headers)
 		curl_slist_free_all(req_headers);
