@@ -1,5 +1,4 @@
 #include "config.h"
-#include <pthread.h>
 
 #include <stdlib.h>
 #include <curl/curl.h>
@@ -44,10 +43,9 @@ enum debug_flags {
 #undef DBG
 };
 
-const int MAX_HANDLES = 10000;
-static CURL *curl_handles[10000];
-/*static pthread_mutex_t mutexes[10000];*/
-static struct lock locks[10000];
+const int MAX_HANDLES = 5000;
+static CURL *curl_handles[5000];
+static struct lock locks[5000];
 
 struct vmod_curl {
 	unsigned magic;
@@ -82,7 +80,7 @@ struct vmod_curl {
 static void cm_clear(struct vmod_curl *c);
 
 static int
-handle_vcl_load_event(VRT_CTX, struct vmod_priv *vcl_priv)
+handle_vcl_load_event(VRT_CTX)
 {
     curl_global_init(CURL_GLOBAL_ALL);
 
@@ -91,9 +89,10 @@ handle_vcl_load_event(VRT_CTX, struct vmod_priv *vcl_priv)
 
     for (int i=0; i < MAX_HANDLES; i++) {
 	curl_handles[i] = curl_easy_init();
-	Lck_New(&locks[i], lock_class);
-	/*pthread_mutex_init (&mutexes[i], NULL);*/
 	AN(curl_handles[i]);
+
+	Lck_New(&locks[i], lock_class);
+	AN(&locks[i]);
     }
 
     // Done!
@@ -101,26 +100,25 @@ handle_vcl_load_event(VRT_CTX, struct vmod_priv *vcl_priv)
 }
 
 static int
-handle_vcl_warm_event(VRT_CTX, struct vmod_priv *vcl_priv)
+handle_vcl_warm_event(VRT_CTX, struct vmod_priv *priv)
 {
     // Done!
     return 0;
 }
 
 static int
-handle_vcl_cold_event(VRT_CTX, struct vmod_priv *vcl_priv)
+handle_vcl_cold_event(VRT_CTX, struct vmod_priv *priv)
 {
     // Done!
     return 0;
 }
 
 static int
-handle_vcl_discard_event(VRT_CTX, struct vmod_priv *vcl_priv)
+handle_vcl_discard_event(VRT_CTX)
 {
     for (int i=0; i < MAX_HANDLES; i++) {
 	curl_easy_cleanup(curl_handles[i]);
 	curl_handles[i] = NULL;
-	/*pthread_mutex_destroy(&mutexes[i]);*/
 	Lck_Delete(&locks[i]);
     }
 
@@ -135,13 +133,13 @@ event_function(VRT_CTX, struct vmod_priv *priv, enum vcl_event_e e)
 	(void)priv;
 	switch (e) {
 		case VCL_EVENT_LOAD:
-		    return handle_vcl_load_event(ctx, priv);
+		    return handle_vcl_load_event(ctx);
 		case VCL_EVENT_WARM:
 		    return handle_vcl_warm_event(ctx, priv);
 		case VCL_EVENT_COLD:
 		    return handle_vcl_cold_event(ctx, priv);
 		case VCL_EVENT_DISCARD:
-		    return handle_vcl_discard_event(ctx, priv);
+		    return handle_vcl_discard_event(ctx);
 		default:
 		    return 0;
 	}
@@ -346,7 +344,6 @@ cm_perform(struct vmod_curl *c)
 	VTAILQ_FOREACH(rh, &c->req_headers, list)
 		req_headers = curl_slist_append(req_headers, rh->value);
 
-	/*pthread_mutex_lock(&mutexes[current_handle]);*/
 	Lck_Lock(&locks[current_handle]);
 
 	CURL *curl_handle = curl_handles[current_handle];
@@ -433,7 +430,6 @@ cm_perform(struct vmod_curl *c)
 		c->error = curl_easy_strerror(cr);
 
 	curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &c->status);
-	/*pthread_mutex_unlock(&mutexes[current_handle]);*/
 	Lck_Unlock(&locks[current_handle]);
 
 	if (req_headers)
