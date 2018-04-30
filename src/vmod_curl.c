@@ -84,6 +84,8 @@ static void cm_clear(struct vmod_curl *c);
 static int
 handle_vcl_load_event(VRT_CTX)
 {
+    struct VSC_C_lck *lock_class;
+    lock_class = Lck_CreateClass("curl");
     curl_global_init(CURL_GLOBAL_ALL);
 
     for (int i=0; i < MAX_HANDLES; i++) {
@@ -99,12 +101,10 @@ handle_vcl_load_event(VRT_CTX)
 static int
 handle_vcl_warm_event(VRT_CTX, struct vmod_priv *priv)
 {
-    struct VSC_C_lck *lock_class;
-    lock_class = Lck_CreateClass("curl");
 
-    for (int i=0; i < MAX_HANDLES; i++) {
-	Lck_New(&locks[i], lock_class);
-    }
+    /*for (int i=0; i < MAX_HANDLES; i++) {*/
+	/*Lck_New(&locks[i], lock_class);*/
+    /*}*/
 
     // Done!
     return 0;
@@ -113,10 +113,10 @@ handle_vcl_warm_event(VRT_CTX, struct vmod_priv *priv)
 static int
 handle_vcl_cold_event(VRT_CTX, struct vmod_priv *priv)
 {
-    for (int i=0; i < MAX_HANDLES; i++) {
-	/*pthread_mutex_destroy(&mutexes[i]);*/
-	Lck_Delete(&locks[i]);
-    }
+    /*for (int i=0; i < MAX_HANDLES; i++) {*/
+	/*[>pthread_mutex_destroy(&mutexes[i]);<]*/
+	/*Lck_Delete(&locks[i]);*/
+    /*}*/
 
     // Done!
     return 0;
