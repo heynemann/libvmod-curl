@@ -1,4 +1,5 @@
 #include "config.h"
+#include "pthread.h"
 
 #include <stdlib.h>
 #include <curl/curl.h>
@@ -46,6 +47,7 @@ enum debug_flags {
 const int MAX_HANDLES = 5000;
 static CURL *curl_handles[5000];
 static struct lock locks[5000];
+static pthread_mutex_t init_mutex;
 
 struct vmod_curl {
 	unsigned magic;
@@ -83,17 +85,6 @@ static int
 handle_vcl_load_event(VRT_CTX)
 {
     curl_global_init(CURL_GLOBAL_ALL);
-
-    struct VSC_C_lck *lock_class;
-    lock_class = Lck_CreateClass("curl");
-
-    for (int i=0; i < MAX_HANDLES; i++) {
-	curl_handles[i] = curl_easy_init();
-	AN(curl_handles[i]);
-
-	Lck_New(&locks[i], lock_class);
-	AN(&locks[i]);
-    }
 
     // Done!
     return 0;
@@ -273,6 +264,22 @@ cm_get(struct vmod_priv *priv)
 		cm_init(cm);
 		priv->priv = cm;
 		priv->free = free_func;
+
+		pthread_mutex_lock(&init_mutex);
+		if (curl_handles[0] == NULL) {
+		    struct VSC_C_lck *lock_class;
+		    lock_class = Lck_CreateClass("curl");
+
+		    for (int i=0; i < MAX_HANDLES; i++) {
+			curl_handles[i] = curl_easy_init();
+			AN(curl_handles[i]);
+
+			Lck_New(&locks[i], lock_class);
+			AN(&locks[i]);
+		    }
+		}
+		pthread_mutex_unlock(&init_mutex);
+
 	} else
 		CAST_OBJ_NOTNULL(cm, priv->priv, VMOD_CURL_MAGIC);
 
