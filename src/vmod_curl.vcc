@@ -57,6 +57,8 @@ $Function VOID header_add_all(PRIV_TASK)
 
 $Function VOID proxy(PRIV_TASK, STRING)
 
+$Function VOID set_pool_size(INT)
+
 $Function VOID set_proxy(PRIV_TASK, STRING)
 $Function VOID set_method(PRIV_TASK, STRING)
 

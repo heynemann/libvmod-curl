@@ -28,7 +28,7 @@ unit:
 		@docker-compose --project-name vmodcurl run varnish /bin/bash -c "cd /app && varnishtest -Dvmod_topbuild=/app src/tests/*.vtc"
 
 run: put compile
-		@docker-compose --project-name vmodcurl run -p "8080:80" varnish /bin/bash -c "varnishd -F -f /app/default.vcl -s malloc,100m -a 0.0.0.0:80 -p http_req_hdr_len=16384 -p http_resp_hdr_len=16384"
+		@docker-compose --project-name vmodcurl run -p "8080:80" varnish /bin/bash -c "rsyslogd && varnishd -F -f /app/default.vcl -s malloc,100m -a 0.0.0.0:80 -p http_req_hdr_len=16384 -p http_resp_hdr_len=16384"
 
 VMOD_TESTS = ./src/tests/*.vtc
 .PHONY: $(VMOD_TESTS)

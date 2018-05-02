@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <stddef.h>
 #include <string.h>
+#include <syslog.h>
 
 #include <cache/cache.h>
 #include <vcl.h>
@@ -44,9 +45,9 @@ enum debug_flags {
 #undef DBG
 };
 
-const int MAX_HANDLES = 25000;
-static CURL *curl_handles[25000];
-static struct lock locks[25000];
+static CURL *curl_handles[70000];
+static struct lock locks[70000];
+static int pool_size = 5000;
 static pthread_mutex_t init_mutex;
 
 struct vmod_curl {
@@ -107,7 +108,7 @@ handle_vcl_cold_event(VRT_CTX, struct vmod_priv *priv)
 static int
 handle_vcl_discard_event(VRT_CTX)
 {
-    for (int i=0; i < MAX_HANDLES; i++) {
+    for (int i=0; i < pool_size; i++) {
 	curl_easy_cleanup(curl_handles[i]);
 	curl_handles[i] = NULL;
 	if (&locks[i] != NULL) {
@@ -272,7 +273,8 @@ cm_get(struct vmod_priv *priv)
 		    struct VSC_C_lck *lock_class;
 		    lock_class = Lck_CreateClass("curl");
 
-		    for (int i=0; i < MAX_HANDLES; i++) {
+		    syslog(LOG_INFO, "[VMOD-Curl] Initializing pool with size of %d.", pool_size);
+		    for (int i=0; i < pool_size; i++) {
 			curl_handles[i] = curl_easy_init();
 			AN(curl_handles[i]);
 
@@ -348,7 +350,7 @@ cm_perform(struct vmod_curl *c)
 	struct curl_slist *req_headers = NULL;
 	struct req_hdr *rh;
 
-	int current_handle = rand() % MAX_HANDLES;
+	int current_handle = rand() % pool_size;
 
 	VTAILQ_FOREACH(rh, &c->req_headers, list)
 		req_headers = curl_slist_append(req_headers, rh->value);
@@ -718,6 +720,14 @@ vmod_unescape(VRT_CTX, VCL_STRING str)
 	curl_free(tmp);
 	curl_easy_cleanup(curl_handle);
 	return (r);
+}
+
+VCL_VOID
+vmod_set_pool_size(VRT_CTX, VCL_INT p_pool_size)
+{
+	(void)ctx;
+	syslog(LOG_INFO, "[VMOD-Curl] The pool size was set to %d.", p_pool_size);
+	pool_size = p_pool_size;
 }
 
 VCL_VOID

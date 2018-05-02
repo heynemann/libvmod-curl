@@ -7,6 +7,10 @@ backend default {
     .port = "8083";
 }
 
+sub vcl_init {
+    curl.set_pool_size(1000);
+}
+
 sub vcl_recv {
     curl.get("http://http:8083");
     if (!curl.error()) {
