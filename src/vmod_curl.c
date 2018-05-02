@@ -111,7 +111,7 @@ handle_vcl_discard_event(VRT_CTX)
     for (int i=0; i < pool_size; i++) {
 	curl_easy_cleanup(curl_handles[i]);
 	curl_handles[i] = NULL;
-	if (&locks[i] != NULL) {
+	if (&locks[i] != NULL && locks[i].priv != NULL) {
 	    Lck_Delete(&locks[i]);
 	}
     }
